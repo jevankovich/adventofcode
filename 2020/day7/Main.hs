@@ -2,10 +2,12 @@
 module Main where
 
 import qualified Data.Tree as T
-import qualified Data.Map.Strict as M
+import qualified Data.Map as M
 import qualified Data.Set as S
 
 import Data.List (foldl')
+import Control.Applicative (liftA2)
+import Control.Monad (join)
 
 import Text.Parsec
 import Text.Parsec.Char
@@ -26,7 +28,7 @@ main = do
     let inv = inverse . M.map (map snd) $ relation
     let invTrans = transitive inv
     print $ subtract 1 . S.size  <$> S.fromList <$> T.flatten <$> M.lookup seed invTrans
-    print $ countBags relation seed
+    print $ M.lookup seed $ countBags relation
     return ()
 
 inverse :: (Ord a, Ord b) => M.Map a [b] -> M.Map b [a]
@@ -37,12 +39,16 @@ transitive :: (Ord a) => M.Map a [a] -> M.Map a (T.Tree a)
 transitive m = M.mapWithKey (\k _ -> transitive' k m) m where
     transitive' k m = T.unfoldTree (\k -> (k, concat $ M.lookup k m)) k
 
-countBags :: M.Map String [(Int, String)] -> String -> Int
-countBags m b = countBags' b - 1 where -- -1 since we don't count the root bag
-    countBags' :: String -> Int
-    countBags' b = case M.lookup b m of
-        Nothing -> error $ "Non-existent bag type " ++ b
-        Just bs -> 1 + (sum . map (\(n, b) -> n * countBags' b) $ bs)
+-- countBags :: M.Map String [(Int, String)] -> String -> Int
+-- countBags m b = countBags' b - 1 where -- -1 since we don't count the root bag
+--     countBags' :: String -> Int
+--     countBags' b = case M.lookup b m of
+--         Nothing -> error $ "Non-existent bag type " ++ b
+--         Just bs -> 1 + (sum . map (\(n, b) -> n * countBags' b) $ bs)
+-- countBags :: M.Map String [(Int, String)] -> M.Map String (Maybe Int)
+countBags :: M.Map String [(Int, String)] -> M.Map String Int
+countBags m = M.mapMaybe id m' where 
+    m' = M.map (foldl' (liftA2 (+)) (Just 0) . map (\(n, b) -> fmap ((n*) . (1+)) (join $ M.lookup b m'))) m
 
 bag :: Parser String
 bag = do
